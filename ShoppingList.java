@@ -31,8 +31,9 @@ public class ShoppingList {
             printHeader("SHOPPING MENU");
             System.out.println(GREEN + "1." + RESET + " 🛒 Add Item to Cart");
             System.out.println(GREEN + "2." + RESET + " 🗑️ Remove Item from Cart");
-            System.out.println(GREEN + "3." + RESET + " 💳 View Cart & Checkout");
-            System.out.println(GREEN + "4." + RESET + " 🚪 Exit");
+            System.out.println(GREEN + "3." + RESET + " 💳 View Cart");
+            System.out.println(GREEN + "4." + RESET + " 💰 Checkout");
+            System.out.println(GREEN + "5." + RESET + " 🚪 Exit");
             printFooter();
 
             System.out.print(YELLOW + "👉 Enter choice: " + RESET);
@@ -48,9 +49,11 @@ public class ShoppingList {
                     removeItem(removeItem);
                 }
 
-                case 3 -> checkout();
+                case 3 -> viewCart();
 
-                case 4 -> {
+                case 4 -> checkout(scanner);
+
+                case 5 -> {
                     System.out.println("\n👋 " + GREEN + "Thank you for shopping. Goodbye!" + RESET);
                     scanner.close();
                     return;
@@ -124,8 +127,8 @@ public class ShoppingList {
         System.out.println(RED + "❌ Item not found in cart." + RESET);
     }
 
-    // Checkout
-    public static void checkout() {
+    // View items in the cart
+    public static void viewCart() {
         if (cartCount == 0) {
             System.out.println(RED + "\n🛍️ Your cart is empty." + RESET);
             return;
@@ -143,16 +146,34 @@ public class ShoppingList {
 
         System.out.println(BOLD + BLUE + "📦 Total items: " + RESET + totalItems);
         System.out.println(BOLD + BLUE + "💲 Total cost: " + RESET + "$" + String.format("%.2f", totalCost));
-
-        // Clear the cart after checkout
-        for (int i = 0; i < cartCount; i++) {
-            cart[i] = null;
-            cartPrices[i] = 0;
-        }
-        cartCount = 0;
-
-        System.out.println(GREEN + "\n🧼 Cart has been cleared after checkout!" + RESET);
     }
+
+    // Checkout
+    public static void checkout(Scanner scanner) {
+        if (cartCount == 0) {
+            System.out.println(RED + "\n🛍️ Your cart is empty." + RESET);
+            return;
+        }
+
+        viewCart();
+        scanner.nextLine(); // 👈 fix: clear leftover newline
+
+        System.out.print(YELLOW + "\n🛒 Proceed to checkout? (y/n): " + RESET);
+        String confirm = scanner.nextLine().trim().toLowerCase();
+
+        if (confirm.equals("y")) {
+            // clear cart
+            for (int i = 0; i < cartCount; i++) {
+                cart[i] = null;
+                cartPrices[i] = 0;
+            }
+            cartCount = 0;
+            System.out.println(GREEN + "\n✅ Checkout successful! Your cart has been cleared." + RESET);
+        } else {
+            System.out.println(RED + "\n❌ Checkout canceled. Your cart is still active." + RESET);
+        }
+    }
+
 
     // ==================== END MAIN  =====================
 
