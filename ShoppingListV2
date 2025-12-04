@@ -1,0 +1,664 @@
+import java.util.Scanner;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+
+public class ShoppingList {
+
+    // Categories as arrays with IDs
+    static String[] fruits = {"apple", "banana", "orange"};
+    static double[] fruitPrices = {1.0, 0.5, 0.8};
+    static String[] fruitIDs = {"F001", "F002", "F003"};
+
+    static String[] snacks = {"chips", "chocolate", "cookies"};
+    static double[] snackPrices = {1.8, 2.5, 2.0};
+    static String[] snackIDs = {"S001", "S002", "S003"};
+
+    // Cart maps items to quantity and price
+    static HashMap<String, Integer> cart = new HashMap<String, Integer>();
+    static HashMap<String, Double> cartPrices = new HashMap<String, Double>();
+    static HashMap<String, String> cartIDs = new HashMap<String, String>();
+
+    // Discount code arrays
+    static String[] discountCodes = new String[50];
+    static int[] discountPercentages = new int[50];
+    static int discountCount = 0;
+
+    // Transaction ID counter
+    static int transactionCounter = 0;
+
+    // Color Codes
+    static final String RESET = "\u001B[0m";
+    static final String CYAN = "\u001B[36m";
+    static final String GREEN = "\u001B[32m";
+    static final String RED = "\u001B[31m";
+    static final String YELLOW = "\u001B[33m";
+    static final String BLUE = "\u001B[34m";
+    static final String BOLD = "\u001B[1m";
+
+    // ================= MAIN COMPONENT ==================
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+
+        loadDiscountCodes();
+        loadTransactionCounter();
+
+        while (true) {
+            printHeader("SHOPPING MENU");
+            System.out.println(GREEN + "1." + RESET + " 🛒 Add Item to Cart");
+            System.out.println(GREEN + "2." + RESET + " 🗑️ Remove Item from Cart");
+            System.out.println(GREEN + "3." + RESET + " 💳 View Cart");
+            System.out.println(GREEN + "4." + RESET + " 💰 Checkout");
+            System.out.println(GREEN + "5." + RESET + " 🚪 Exit");
+            printFooter();
+
+            System.out.print(YELLOW + "👉 Enter choice: " + RESET);
+
+            try {
+                int choice = scanner.nextInt();
+
+                if (choice == 1) {
+                    addItemFlow(scanner);
+                } else if (choice == 2) {
+                    removeItemFlow(scanner);
+                } else if (choice == 3) {
+                    viewCart();
+                } else if (choice == 4) {
+                    checkout(scanner);
+                } else if (choice == 5) {
+                    System.out.println("\n👋 " + GREEN + "Thank you for shopping. Goodbye!" + RESET);
+                    scanner.close();
+                    return;
+                } else {
+                    System.out.println(RED + "❌ Invalid choice. Try again." + RESET);
+                }
+            } catch (Exception e) {
+                System.out.println(RED + "❌ Invalid input! Please enter a number." + RESET);
+                scanner.nextLine();
+            }
+        }
+    }
+
+    // ================= LOAD TRANSACTION COUNTER =================
+    public static void loadTransactionCounter() {
+        try {
+            File file = new File("transaction_counter.txt");
+            if (file.exists()) {
+                Scanner fileScanner = new Scanner(file);
+                if (fileScanner.hasNextLine()) {
+                    transactionCounter = Integer.parseInt(fileScanner.nextLine().trim());
+                }
+                fileScanner.close();
+            } else {
+                transactionCounter = 0;
+                saveTransactionCounter();
+            }
+        } catch (Exception e) {
+            transactionCounter = 0;
+        }
+    }
+
+    // ================= SAVE TRANSACTION COUNTER =================
+    public static void saveTransactionCounter() {
+        try {
+            java.io.FileWriter writer = new java.io.FileWriter("transaction_counter.txt");
+            writer.write(String.valueOf(transactionCounter));
+            writer.close();
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Error saving transaction counter." + RESET);
+        }
+    }
+
+    // ================= GET NEXT TRANSACTION ID =================
+    public static String getNextTransactionID() {
+        transactionCounter++;
+        saveTransactionCounter();
+        return String.format("%04d", transactionCounter);
+    }
+
+    // ================= LOAD DISCOUNT CODES =================
+    public static void loadDiscountCodes() {
+        try {
+            File file = new File("discount_codes.txt");
+            Scanner fileScanner = new Scanner(file);
+
+            while (fileScanner.hasNextLine()) {
+                String line = fileScanner.nextLine().trim();
+
+                if (!line.isEmpty() && line.contains(":")) {
+                    String[] parts = line.split(":");
+
+                    if (parts.length == 2) {
+                        try {
+                            discountCodes[discountCount] = parts[0].trim().toUpperCase();
+                            discountPercentages[discountCount] = Integer.parseInt(parts[1].trim());
+                            discountCount++;
+                        } catch (NumberFormatException e) {
+                            System.out.println(RED + "⚠️ Invalid discount format in file: " + line + RESET);
+                        }
+                    }
+                }
+            }
+            fileScanner.close();
+            System.out.println(GREEN + "✅ Loaded " + discountCount + " discount codes." + RESET);
+
+        } catch (FileNotFoundException e) {
+            System.out.println(YELLOW + "⚠️ Discount codes file not found. Creating default file..." + RESET);
+            createDefaultDiscountFile();
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Error loading discount codes: " + e.getMessage() + RESET);
+        }
+    }
+
+    // ================= CREATE DEFAULT DISCOUNT FILE =================
+    public static void createDefaultDiscountFile() {
+        try {
+            java.io.FileWriter writer = new java.io.FileWriter("discount_codes.txt");
+            writer.write("SAVE10:10\n");
+            writer.write("SAVE20:20\n");
+            writer.write("WELCOME:15\n");
+            writer.write("FRIDAY:25\n");
+            writer.write("NEWUSER:5\n");
+            writer.close();
+            System.out.println(GREEN + "✅ Created discount_codes.txt with default codes." + RESET);
+
+            loadDiscountCodes();
+
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Could not create discount file." + RESET);
+        }
+    }
+
+    // ================= VALIDATE DISCOUNT CODE =================
+    public static int validateDiscountCode(String code) {
+        String upperCode = code.trim().toUpperCase();
+
+        for (int i = 0; i < discountCount; i++) {
+            if (discountCodes[i].equals(upperCode)) {
+                return discountPercentages[i];
+            }
+        }
+        return 0;
+    }
+
+    // ================= ADD ITEM FLOW - UNIFIED METHOD =================
+    public static void addItemFlow(Scanner scanner) {
+        scanner.nextLine(); // Clear buffer
+
+        printHeader("ADD ITEM TO CART");
+        System.out.println(YELLOW + "🍎 FRUITS:" + RESET);
+        for (int i = 0; i < fruits.length; i++) {
+            System.out.printf(GREEN + "%d." + RESET + " [%s] %-15s $%.2f%n",
+                    (i + 1), fruitIDs[i], capitalize(fruits[i]), fruitPrices[i]);
+        }
+        System.out.println();
+        System.out.println(YELLOW + "🍪 SNACKS:" + RESET);
+        for (int i = 0; i < snacks.length; i++) {
+            System.out.printf(GREEN + "%d." + RESET + " [%s] %-15s $%.2f%n",
+                    (i + fruits.length + 1), snackIDs[i], capitalize(snacks[i]), snackPrices[i]);
+        }
+        printFooter();
+
+        System.out.print(YELLOW + "👉 Enter item (number/ID/name): " + RESET);
+        String input = scanner.nextLine().trim();
+
+        ItemInfo itemInfo = findItem(input);
+
+        if (itemInfo == null) {
+            System.out.println(RED + "❌ Item not found." + RESET);
+            return;
+        }
+
+        System.out.print(YELLOW + "👉 Enter quantity: " + RESET);
+        try {
+            int quantity = scanner.nextInt();
+
+            // ===================== NEW VALIDATION #1 =====================
+            if (quantity <= 0) {
+                System.out.println(RED + "❌ Quantity must be positive." + RESET);
+                return;
+            }
+            // ============================================================
+
+            int currentQuantity = cart.getOrDefault(itemInfo.name, 0);
+            cart.put(itemInfo.name, currentQuantity + quantity);
+            cartPrices.put(itemInfo.name, itemInfo.price);
+            cartIDs.put(itemInfo.name, itemInfo.id);
+
+            System.out.println(GREEN + "✅ Added " + quantity + " x " + capitalize(itemInfo.name) +
+                    " [" + itemInfo.id + "] to cart!" + RESET);
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Invalid quantity!" + RESET);
+            scanner.nextLine();
+        }
+    }
+
+    // ================= FIND ITEM =================
+    public static ItemInfo findItem(String input) {
+        try {
+            int itemNumber = Integer.parseInt(input);
+
+            if (itemNumber >= 1 && itemNumber <= fruits.length) {
+                int index = itemNumber - 1;
+                return new ItemInfo(fruits[index], fruitPrices[index], fruitIDs[index]);
+            }
+
+            if (itemNumber > fruits.length && itemNumber <= fruits.length + snacks.length) {
+                int index = itemNumber - fruits.length - 1;
+                return new ItemInfo(snacks[index], snackPrices[index], snackIDs[index]);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        for (int i = 0; i < fruitIDs.length; i++) {
+            if (fruitIDs[i].equalsIgnoreCase(input)) {
+                return new ItemInfo(fruits[i], fruitPrices[i], fruitIDs[i]);
+            }
+        }
+
+        for (int i = 0; i < snackIDs.length; i++) {
+            if (snackIDs[i].equalsIgnoreCase(input)) {
+                return new ItemInfo(snacks[i], snackPrices[i], snackIDs[i]);
+            }
+        }
+
+        for (int i = 0; i < fruits.length; i++) {
+            if (fruits[i].equalsIgnoreCase(input)) {
+                return new ItemInfo(fruits[i], fruitPrices[i], fruitIDs[i]);
+            }
+        }
+
+        for (int i = 0; i < snacks.length; i++) {
+            if (snacks[i].equalsIgnoreCase(input)) {
+                return new ItemInfo(snacks[i], snackPrices[i], snackIDs[i]);
+            }
+        }
+
+        return null;
+    }
+
+    // ================= ITEM INFO CLASS =================
+    static class ItemInfo {
+        String name;
+        double price;
+        String id;
+
+        ItemInfo(String name, double price, String id) {
+            this.name = name;
+            this.price = price;
+            this.id = id;
+        }
+    }
+
+    // ================= REMOVE ITEM FLOW =================
+    public static void removeItemFlow(Scanner scanner) {
+        if (cart.isEmpty()) {
+            System.out.println(RED + "\n🛍️ Your cart is empty. Nothing to remove." + RESET);
+            return;
+        }
+
+        printHeader("REMOVE ITEM FROM CART");
+
+        int displayNum = 1;
+        for (String item : cart.keySet()) {
+            int quantity = cart.get(item);
+            double price = cartPrices.get(item);
+            String itemID = cartIDs.get(item);
+            System.out.printf(GREEN + "%d." + RESET + " [%s] %-15s x%-2d $%.2f%n",
+                    displayNum++, itemID, capitalize(item), quantity, price * quantity);
+        }
+        printFooter();
+
+        scanner.nextLine();
+        System.out.print(YELLOW + "👉 Enter item (number/ID/name) to remove: " + RESET);
+
+        try {
+            String input = scanner.nextLine().trim();
+            String itemToRemove = null;
+
+            try {
+                int displayNumber = Integer.parseInt(input);
+                if (displayNumber >= 1 && displayNumber <= cart.size()) {
+                    int currentNum = 1;
+                    for (String item : cart.keySet()) {
+                        if (currentNum == displayNumber) {
+                            itemToRemove = item;
+                            break;
+                        }
+                        currentNum++;
+                    }
+                }
+            } catch (NumberFormatException ignored) {}
+
+            if (itemToRemove == null) {
+                for (String item : cart.keySet()) {
+                    String itemID = cartIDs.get(item);
+                    if (itemID != null && itemID.equalsIgnoreCase(input)) {
+                        itemToRemove = item;
+                        break;
+                    }
+                }
+            }
+
+            if (itemToRemove == null) {
+                for (String item : cart.keySet()) {
+                    if (item.equalsIgnoreCase(input)) {
+                        itemToRemove = item;
+                        break;
+                    }
+                }
+            }
+
+            if (itemToRemove != null) {
+                int currentQuantity = cart.get(itemToRemove);
+                System.out.print(YELLOW + "👉 Enter quantity to remove (current: " + currentQuantity + ", or 0 for all): " + RESET);
+                int removeQuantity = scanner.nextInt();
+
+                // ===================== NEW VALIDATION #2 =====================
+                if (removeQuantity > currentQuantity) {
+                    System.out.println(RED + "❌ Cannot remove more than what is in the cart." + RESET);
+                    return;
+                }
+                // ============================================================
+
+                if (removeQuantity <= 0 || removeQuantity == currentQuantity) {
+                    cart.remove(itemToRemove);
+                    cartPrices.remove(itemToRemove);
+                    cartIDs.remove(itemToRemove);
+                    System.out.println(RED + "🗑️ Removed all " + capitalize(itemToRemove) + " from cart." + RESET);
+                } else {
+                    cart.put(itemToRemove, currentQuantity - removeQuantity);
+                    System.out.println(RED + "🗑️ Removed " + removeQuantity + " x " + capitalize(itemToRemove) + " from cart." + RESET);
+                }
+            } else {
+                System.out.println(RED + "❌ Item not found. No item removed." + RESET);
+            }
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Invalid input!" + RESET);
+            scanner.nextLine();
+        }
+    }
+
+    // ================= VIEW CART =================
+    public static void viewCart() {
+        if (cart.isEmpty()) {
+            System.out.println(RED + "\n🛍️ Your cart is empty." + RESET);
+            return;
+        }
+
+        double totalCost = 0.0;
+
+        printHeader("🛒 CART SUMMARY");
+        int count = 1;
+        for (String item : cart.keySet()) {
+            int quantity = cart.get(item);
+            double price = cartPrices.get(item);
+            String itemID = cartIDs.get(item);
+            System.out.printf(GREEN + "%d." + RESET + " [%s] %-15s x%-2d $%.2f%n",
+                    count++, itemID, capitalize(item), quantity, price * quantity);
+            totalCost += price * quantity;
+        }
+        printFooter();
+
+        int totalItems = 0;
+        for (int q : cart.values()) {
+            totalItems += q;
+        }
+
+        System.out.println(BOLD + BLUE + "📦 Total items: " + RESET + totalItems);
+        System.out.println(BOLD + BLUE + "💲 Total cost: " + RESET + String.format("$%.2f", totalCost));
+    }
+
+    // ================= CHECKOUT =================
+    public static void checkout(Scanner scanner) {
+        if (cart.isEmpty()) {
+            System.out.println(RED + "\n🛍️ Your cart is empty." + RESET);
+            return;
+        }
+
+        viewCart();
+        scanner.nextLine();
+
+        double subtotal = 0;
+        for (String item : cart.keySet()) {
+            subtotal += cartPrices.get(item) * cart.get(item);
+        }
+
+        int totalQuantity = 0;
+        for (int q : cart.values()) {
+            totalQuantity += q;
+        }
+
+        double bundleDiscountRate = 0;
+        if (totalQuantity >= 5) {
+            bundleDiscountRate = 0.20;
+        } else if (totalQuantity >= 3) {
+            bundleDiscountRate = 0.10;
+        }
+
+        System.out.print(YELLOW + "\n🎟️ Enter discount code (or press Enter to skip): " + RESET);
+        String promoCode = scanner.nextLine().trim();
+        int promoDiscountPercent = validateDiscountCode(promoCode);
+        double promoDiscountRate = promoDiscountPercent / 100.0;
+
+        if (promoDiscountPercent > 0) {
+            System.out.println(GREEN + "✅ Valid code! " + promoDiscountPercent + "% discount applied." + RESET);
+        } else if (!promoCode.isEmpty()) {
+            System.out.println(RED + "❌ Invalid discount code." + RESET);
+        }
+
+        double totalDiscountRate = bundleDiscountRate + promoDiscountRate;
+        double bundleDiscountAmount = subtotal * bundleDiscountRate;
+        double promoDiscountAmount = subtotal * promoDiscountRate;
+        double totalDiscountAmount = bundleDiscountAmount + promoDiscountAmount;
+        double finalTotal = subtotal - totalDiscountAmount;
+
+        System.out.println(BLUE + "\n========== DISCOUNT SUMMARY ==========" + RESET);
+        System.out.println(BOLD + "🧮 Subtotal: " + RESET + String.format("$%.2f", subtotal));
+
+        if (bundleDiscountRate > 0) {
+            System.out.println(BOLD + "🎁 Bundle Discount: " + RESET +
+                    (int)(bundleDiscountRate*100) + "% (-$" + String.format("%.2f", bundleDiscountAmount) + ")");
+        }
+
+        if (promoDiscountRate > 0) {
+            System.out.println(BOLD + "🎟️ Promo Code Discount: " + RESET +
+                    (int)(promoDiscountRate*100) + "% (-$" + String.format("%.2f", promoDiscountAmount) + ")");
+        }
+
+        if (totalDiscountRate > 0) {
+            System.out.println(BOLD + GREEN + "🎉 Total Discount: " + RESET +
+                    (int)(totalDiscountRate*100) + "% (-$" + String.format("%.2f", totalDiscountAmount) + ")");
+        } else {
+            System.out.println(BOLD + "🎁 Discount: " + RESET + "No discount applied");
+        }
+
+        System.out.println(BOLD + "💰 Final Total: " + RESET + "$" + String.format("%.2f", finalTotal));
+        System.out.println(BLUE + "======================================\n" + RESET);
+
+        try {
+            System.out.print(YELLOW + "🛒 Proceed to checkout? (y/n): " + RESET);
+            String confirm = scanner.nextLine().toLowerCase();
+
+            if (confirm.equals("y")) {
+                String transactionID = getNextTransactionID();
+
+                printReceiptToFile(transactionID, subtotal, bundleDiscountRate, bundleDiscountAmount,
+                        promoDiscountPercent, promoDiscountAmount,
+                        totalDiscountAmount, finalTotal, promoCode);
+
+                recordStoreSale(transactionID, subtotal, bundleDiscountRate, bundleDiscountAmount,
+                        promoDiscountPercent, promoDiscountAmount,
+                        totalDiscountAmount, finalTotal, promoCode);
+
+                cart.clear();
+                cartPrices.clear();
+                cartIDs.clear();
+
+                System.out.println(GREEN + "\n✅ Checkout successful! Thank you for shopping. Goodbye!" + RESET);
+                scanner.close();
+                System.exit(0);
+            } else {
+                System.out.println(RED + "\n❌ Checkout canceled. Your items are still in the cart." + RESET);
+            }
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Error during checkout confirmation." + RESET);
+        }
+    }
+
+    // ================= PRINT CUSTOMER RECEIPT =================
+    public static void printReceiptToFile(String transactionID, double subtotal, double bundleDiscountRate,
+                                          double bundleDiscountAmount, int promoDiscountPercent,
+                                          double promoDiscountAmount, double totalDiscountAmount,
+                                          double finalTotal, String promoCode) {
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            DateTimeFormatter fileFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+            String filename = "receipt_" + now.format(fileFormatter) + ".txt";
+
+            java.io.FileWriter writer = new java.io.FileWriter(filename);
+            DateTimeFormatter displayFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm:ss a");
+            String dateTime = now.format(displayFormatter);
+
+            writer.write("========================================\n");
+            writer.write("         SHOPPING RECEIPT\n");
+            writer.write("========================================\n");
+            writer.write("ID: " + transactionID + "\n");
+            writer.write("Date: " + dateTime + "\n");
+            writer.write("========================================\n\n");
+
+            writer.write("ITEMS PURCHASED:\n");
+            writer.write("----------------------------------------\n");
+            for (String item : cart.keySet()) {
+                int quantity = cart.get(item);
+                double price = cartPrices.get(item);
+                writer.write(String.format("%-20s x%-2d $%.2f%n", capitalize(item), quantity, price * quantity));
+            }
+            writer.write("----------------------------------------\n\n");
+
+            writer.write("PAYMENT SUMMARY:\n");
+            writer.write("----------------------------------------\n");
+            writer.write(String.format("Subtotal:           $%.2f%n", subtotal));
+            if (bundleDiscountRate > 0) {
+                writer.write(String.format("Bundle Discount:    -%d%% (-$%.2f)%n",
+                        (int)(bundleDiscountRate*100), bundleDiscountAmount));
+            }
+            if (promoDiscountPercent > 0) {
+                writer.write(String.format("Promo Code (%s):   -%d%% (-$%.2f)%n",
+                        promoCode.toUpperCase(), promoDiscountPercent, promoDiscountAmount));
+            }
+            if (totalDiscountAmount > 0) {
+                writer.write(String.format("Total Savings:      -$%.2f%n", totalDiscountAmount));
+            }
+            writer.write("----------------------------------------\n");
+            writer.write(String.format("FINAL TOTAL:        $%.2f%n", finalTotal));
+            writer.write("========================================\n\n");
+            writer.write("Thank you for shopping with us!\n");
+            writer.write("========================================\n");
+
+            writer.close();
+            System.out.println(GREEN + "📄 Receipt saved to: " + filename + RESET);
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Error saving receipt: " + e.getMessage() + RESET);
+        }
+    }
+
+    // ================= RECORD STORE SALE =================
+    public static void recordStoreSale(String transactionID, double subtotal, double bundleDiscountRate,
+                                       double bundleDiscountAmount, int promoDiscountPercent,
+                                       double promoDiscountAmount, double totalDiscountAmount,
+                                       double finalTotal, String promoCode) {
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            String today = now.format(dateFormatter);
+
+            String filename = "store_sales.txt";
+            File file = new File(filename);
+
+            boolean newDayHeader = true;
+            if (file.exists()) {
+                Scanner sc = new Scanner(file);
+                while (sc.hasNextLine()) {
+                    String line = sc.nextLine();
+                    if (line.equals("Date: " + today)) {
+                        newDayHeader = false;
+                        break;
+                    }
+                }
+                sc.close();
+            }
+
+            java.io.FileWriter writer = new java.io.FileWriter(filename, true);
+            if (newDayHeader) {
+                writer.write("\n========================================\n");
+                writer.write("Date: " + today + "\n");
+                writer.write("========================================\n\n");
+            }
+
+            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm:ss a");
+            String time = now.format(timeFormatter);
+
+            String nl = System.lineSeparator();
+
+            writer.write("ID: " + transactionID + "\n");
+            writer.write("Time: " + time + "\n");
+            writer.write("Items Purchased:\n");
+            for (String item : cart.keySet()) {
+                int quantity = cart.get(item);
+                double price = cartPrices.get(item);
+                writer.write(String.format(" - %-15s x%-2d $%.2f%n", capitalize(item), quantity, price * quantity));
+            }
+            writer.write(String.format("Subtotal: $%.2f%n", subtotal));
+            if (bundleDiscountRate > 0) {
+                writer.write(String.format("Bundle Discount: -%d%% (-$%.2f)%n", (int)(bundleDiscountRate*100), bundleDiscountAmount));
+            }
+            if (promoDiscountPercent > 0) {
+                writer.write(String.format("Promo Code (%s): -%d%% (-$%.2f)%n", promoCode.toUpperCase(), promoDiscountPercent, promoDiscountAmount));
+            }
+            writer.write(String.format("Total Discount: -$%.2f", totalDiscountAmount) + System.lineSeparator());
+
+            writer.write(String.format("Final Total: $%.2f%n", finalTotal));
+            writer.write("----------------------------------------" + nl + nl);
+
+            writer.close();
+            System.out.println(GREEN + "📄 Sale recorded for store owner in " + filename + RESET);
+        } catch (Exception e) {
+            System.out.println(RED + "❌ Error recording store sale: " + e.getMessage() + RESET);
+        }
+    }
+
+    // ================= UI HELPERS =================
+    public static String capitalize(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
+        }
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
+    }
+
+    public static void printHeader(String title) {
+        System.out.println("\n" + CYAN + "╔══════════════════════════════════════╗" + RESET);
+        System.out.println(CYAN + "║ " + BOLD + centerText(title, 36) + CYAN + " ║" + RESET);
+        System.out.println(CYAN + "╚══════════════════════════════════════╝" + RESET);
+    }
+
+    public static void printFooter() {
+        System.out.println(CYAN + "────────────────────────────────────────" + RESET);
+    }
+
+    public static String centerText(String text, int width) {
+        int padding = Math.max(0, width - text.length());
+        int left = padding / 2;
+        int right = padding - left;
+        String leftSpaces = "";
+        String rightSpaces = "";
+        for (int i = 0; i < left; i++) {
+            leftSpaces += " ";
+        }
+        for (int i = 0; i < right; i++) {
+            rightSpaces += " ";
+        }
+        return leftSpaces + text + rightSpaces;
+    }
+}
